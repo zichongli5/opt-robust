@@ -1,6 +1,6 @@
 # Understanding the robustness difference between stochastic gradient descent and adaptive gradient methods
 
-This is the official repository of "Understanding the robustness difference between stochastic gradient descent and adaptive gradient methods" accepted at Transactions on Machine Learning Research (TMLR).
+This is the official repository of "Understanding the robustness difference between stochastic gradient descent and adaptive gradient methods" accepted at Transactions on Machine Learning Research (TMLR) ([paper](https://openreview.net/forum?id=ed8SkMdYFT), [blog](https://vectorinstitute.ai/is-your-neural-network-at-risk-the-pitfall-of-adaptive-gradient-optimizers/)).
 
 ![Comparing model robustness](figures/comparison.png)
 **Comparison between models trained using SGD, Adam, and RMSProp across seven benchmark datasets.** 
