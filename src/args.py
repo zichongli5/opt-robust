@@ -16,6 +16,22 @@ def parse_args():
     parser.add_argument("--pretrain",
                         default=None, type=str)
 
+    # vision transformer specific hyperparameters
+    parser.add_argument("--vit_patch_size",
+                        default=argparse.SUPPRESS, type=int)
+    parser.add_argument("--vit_embed_dim",
+                        default=argparse.SUPPRESS, type=int)
+    parser.add_argument("--vit_depth",
+                        default=argparse.SUPPRESS, type=int)
+    parser.add_argument("--vit_num_heads",
+                        default=argparse.SUPPRESS, type=int)
+    parser.add_argument("--vit_mlp_ratio",
+                        default=argparse.SUPPRESS, type=float)
+    parser.add_argument("--vit_dropout",
+                        default=argparse.SUPPRESS, type=float)
+    parser.add_argument("--vit_attention_dropout",
+                        default=argparse.SUPPRESS, type=float)
+
     # hyper-param for optimization
     parser.add_argument("--optim",
     			default=argparse.SUPPRESS)
@@ -84,4 +100,3 @@ def get_args():
     args_dict = DictWrapper(default)
 
     return args_dict
-

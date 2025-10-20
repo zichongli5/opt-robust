@@ -134,16 +134,37 @@ def seed_everything(manual_seed):
 
 def get_model(args):
     if args.dataset == 'cifar100':
-        num_classes=100
+        num_classes = 100
+        img_size = 32
     elif args.dataset == 'cifar10':
-        num_classes=10
-    
+        num_classes = 10
+        img_size = 32
+    else:
+        raise ValueError(f"Unsupported dataset '{args.dataset}' for model creation.")
+
     if args.speedrun_arch:
         model = make_net94()
         return model
-    
 
-    model = PreActResNet18(args.dataset, num_classes, args.input_normalization, args.enable_batchnorm)
+    arch = getattr(args, "arch", "")
+    arch = arch.lower() if isinstance(arch, str) else arch
+
+    if arch in {"vit", "vit_cifar", "vision_transformer"}:
+        model = vit_cifar(
+            num_classes=num_classes,
+            img_size=img_size,
+            patch_size=getattr(args, "vit_patch_size", 4),
+            embed_dim=getattr(args, "vit_embed_dim", 256),
+            depth=getattr(args, "vit_depth", 6),
+            num_heads=getattr(args, "vit_num_heads", 8),
+            mlp_ratio=getattr(args, "vit_mlp_ratio", 4.0),
+            dropout=getattr(args, "vit_dropout", 0.0),
+            attention_dropout=getattr(args, "vit_attention_dropout", 0.0),
+            input_normalization=args.input_normalization,
+        )
+    else:
+        model = PreActResNet18(args.dataset, num_classes, args.input_normalization, args.enable_batchnorm)
+
     for n, p in model.named_parameters():
         print(n, p.size())
     if args.pretrain:

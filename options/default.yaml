@@ -5,6 +5,15 @@ arch: "c12"
 log_dir: "./exp/"
 pretrain: ""
 
+# vision transformer defaults
+vit_patch_size: 4
+vit_embed_dim: 256
+vit_depth: 6
+vit_num_heads: 8
+vit_mlp_ratio: 4.0
+vit_dropout: 0.0
+vit_attention_dropout: 0.0
+
 # optimization settings
 optim: "sgd"
 lr: 0.1
