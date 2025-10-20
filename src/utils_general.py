@@ -154,13 +154,13 @@ def get_model(args):
             num_classes=num_classes,
             img_size=img_size,
             patch_size=getattr(args, "vit_patch_size", 4),
-            embed_dim=getattr(args, "vit_embed_dim", 256),
-            depth=getattr(args, "vit_depth", 6),
-            num_heads=getattr(args, "vit_num_heads", 8),
+            embed_dim=getattr(args, "vit_embed_dim", 384),
+            depth=getattr(args, "vit_depth", 7),
+            num_heads=getattr(args, "vit_num_heads", 12),
             mlp_ratio=getattr(args, "vit_mlp_ratio", 4.0),
             dropout=getattr(args, "vit_dropout", 0.0),
-            attention_dropout=getattr(args, "vit_attention_dropout", 0.0),
             input_normalization=args.input_normalization,
+            use_cls_token=getattr(args, "vit_use_cls_token", True),
         )
     else:
         model = PreActResNet18(args.dataset, num_classes, args.input_normalization, args.enable_batchnorm)

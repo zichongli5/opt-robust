@@ -29,8 +29,8 @@ def parse_args():
                         default=argparse.SUPPRESS, type=float)
     parser.add_argument("--vit_dropout",
                         default=argparse.SUPPRESS, type=float)
-    parser.add_argument("--vit_attention_dropout",
-                        default=argparse.SUPPRESS, type=float)
+    parser.add_argument("--vit_use_cls_token",
+                        default=argparse.SUPPRESS, type=lambda x: bool(distutils.util.strtobool(x)))
 
     # hyper-param for optimization
     parser.add_argument("--optim",
@@ -72,9 +72,9 @@ def parse_args():
     			default=90, type=float)
 
     parser.add_argument('--input_normalization',
-                        default=False, type=distutils.util.strtobool)
+                        default=argparse.SUPPRESS, type=distutils.util.strtobool)
     parser.add_argument('--enable_batchnorm',
-                        default=False, type=distutils.util.strtobool)
+                        default=argparse.SUPPRESS, type=distutils.util.strtobool)
     
     parser.add_argument('--eval_only',
                         action="store_true")
@@ -94,9 +94,39 @@ def get_default(yaml_path):
 
 def get_args():
     args = parse_args()
+    cli_args = vars(args)
     default = get_default('options/default.yaml')
-    
-    default.update(vars(args).items())
+
+    arch_value = cli_args.get('arch', default.get('arch', ''))
+    arch_normalized = arch_value.lower() if isinstance(arch_value, str) else arch_value
+
+    if arch_normalized in {"vit", "vit_cifar", "vision_transformer"}:
+        vit_overrides = {
+            "optim": "adamw",
+            "lr": 5e-4,
+            "weight_decay": 0.05,
+            "adam_beta1": 0.9,
+            "adam_beta2": 0.999,
+            "lr_scheduler_type": "cosine",
+            "lr_warmup_epoch": 5,
+            "lr_warmup_type": "linear",
+            "lr_warmup_decay": 0.0,
+            "lr_end_factor": 0.0,
+        }
+        for key, value in vit_overrides.items():
+            if key not in cli_args:
+                default[key] = value
+
+        if "batch_size" not in cli_args:
+            default["batch_size"] = 512
+        if "epoch" not in cli_args:
+            default["epoch"] = 100
+        if "input_normalization" not in cli_args:
+            default["input_normalization"] = True
+        if "vit_use_cls_token" not in cli_args:
+            default.setdefault("vit_use_cls_token", True)
+
+    default.update(cli_args)
     args_dict = DictWrapper(default)
 
     return args_dict

@@ -7,12 +7,16 @@ pretrain: ""
 
 # vision transformer defaults
 vit_patch_size: 4
-vit_embed_dim: 256
-vit_depth: 6
-vit_num_heads: 8
+vit_embed_dim: 384
+vit_depth: 7
+vit_num_heads: 12
 vit_mlp_ratio: 4.0
 vit_dropout: 0.0
-vit_attention_dropout: 0.0
+vit_use_cls_token: true
+
+# input normalization / batch norm defaults
+input_normalization: false
+enable_batchnorm: false
 
 # optimization settings
 optim: "sgd"

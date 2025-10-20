@@ -4,69 +4,86 @@ import torch.nn as nn
 
 
 def _trunc_normal_(tensor, std=0.02):
-    if hasattr(torch.nn.init, 'trunc_normal_'):
+    if hasattr(torch.nn.init, "trunc_normal_"):
         return torch.nn.init.trunc_normal_(tensor, std=std)
     with torch.no_grad():
         return tensor.normal_(mean=0.0, std=std)
 
 
 class PatchEmbed(nn.Module):
-    def __init__(self, img_size=32, patch_size=4, in_chans=3, embed_dim=256):
+    """Split image into non-overlapping patches and flatten."""
+
+    def __init__(self, img_size=32, patch_size=4, in_chans=3):
         super().__init__()
         if img_size % patch_size != 0:
             raise ValueError("img_size must be divisible by patch_size.")
         self.img_size = img_size
         self.patch_size = patch_size
-        self.num_patches = (img_size // patch_size) * (img_size // patch_size)
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.grid_size = img_size // patch_size
+        self.num_patches = self.grid_size * self.grid_size
+        self.patch_dim = in_chans * patch_size * patch_size
 
     def forward(self, x):
-        _, _, h, w = x.shape
+        b, c, h, w = x.shape
         if h != self.img_size or w != self.img_size:
             raise ValueError(f"Expected input size {(self.img_size, self.img_size)}, got {(h, w)}.")
-        x = self.proj(x)
-        x = x.flatten(2).transpose(1, 2)
-        return x
+        patches = (
+            x.unfold(2, self.patch_size, self.patch_size)
+             .unfold(3, self.patch_size, self.patch_size)
+             .permute(0, 2, 3, 1, 4, 5)
+             .reshape(b, self.num_patches, self.patch_dim)
+        )
+        return patches
 
 
-class MLP(nn.Module):
-    def __init__(self, embed_dim, mlp_ratio=4.0, dropout=0.0):
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads=8, dropout=0.0):
         super().__init__()
-        hidden_dim = int(embed_dim * mlp_ratio)
-        self.fc1 = nn.Linear(embed_dim, hidden_dim)
-        self.act = nn.GELU()
-        self.drop1 = nn.Dropout(dropout)
-        self.fc2 = nn.Linear(hidden_dim, embed_dim)
-        self.drop2 = nn.Dropout(dropout)
+        if embed_dim % num_heads != 0:
+            raise ValueError("embed_dim must be divisible by num_heads.")
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.scale = embed_dim ** 0.5
+
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop1(x)
-        x = self.fc2(x)
-        x = self.drop2(x)
-        return x
+        bsz, num_tokens, _ = x.shape
+        q = self.q_proj(x).view(bsz, num_tokens, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(x).view(bsz, num_tokens, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(x).view(bsz, num_tokens, self.num_heads, self.head_dim).transpose(1, 2)
+
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / self.scale
+        attn_weights = torch.softmax(attn_scores, dim=-1)
+        attn_output = torch.matmul(attn_weights, v)
+        attn_output = attn_output.transpose(1, 2).reshape(bsz, num_tokens, self.embed_dim)
+        attn_output = self.dropout(self.out_proj(attn_output))
+        return attn_output
 
 
 class TransformerEncoderBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads, mlp_ratio=4.0, dropout=0.0, attention_dropout=0.0):
+    def __init__(self, embed_dim, num_heads, mlp_hidden_dim, dropout=0.0):
         super().__init__()
         self.norm1 = nn.LayerNorm(embed_dim)
-        self.attn = nn.MultiheadAttention(embed_dim, num_heads, dropout=attention_dropout, batch_first=True)
-        self.drop_path1 = nn.Dropout(dropout)
+        self.attn = MultiHeadSelfAttention(embed_dim, num_heads=num_heads, dropout=dropout)
         self.norm2 = nn.LayerNorm(embed_dim)
-        self.mlp = MLP(embed_dim, mlp_ratio=mlp_ratio, dropout=dropout)
-        self.drop_path2 = nn.Dropout(dropout)
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, mlp_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(mlp_hidden_dim, embed_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
 
     def forward(self, x):
-        residual = x
-        x = self.norm1(x)
-        x, _ = self.attn(x, x, x, need_weights=False)
-        x = residual + self.drop_path1(x)
-
-        residual = x
-        x = self.norm2(x)
-        x = residual + self.drop_path2(self.mlp(x))
+        x = self.attn(self.norm1(x)) + x
+        x = self.mlp(self.norm2(x)) + x
         return x
 
 
@@ -77,49 +94,54 @@ class VisionTransformer(nn.Module):
         patch_size=4,
         in_chans=3,
         num_classes=10,
-        embed_dim=256,
-        depth=6,
-        num_heads=8,
+        embed_dim=384,
+        depth=7,
+        num_heads=12,
         mlp_ratio=4.0,
         dropout=0.0,
-        attention_dropout=0.0,
         input_normalization=True,
+        use_cls_token=True,
     ):
         super().__init__()
         self.input_normalization = input_normalization
+        self.use_cls_token = use_cls_token
 
-        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
-        num_patches = self.patch_embed.num_patches
+        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans)
+        self.embed = nn.Linear(self.patch_embed.patch_dim, embed_dim)
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, embed_dim))
-        self.pos_drop = nn.Dropout(dropout)
+        token_count = self.patch_embed.num_patches + (1 if use_cls_token else 0)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim)) if use_cls_token else None
+        self.pos_embed = nn.Parameter(torch.randn(1, token_count, embed_dim))
 
-        self.blocks = nn.ModuleList(
-            [
+        mlp_hidden_dim = int(embed_dim * mlp_ratio)
+        self.blocks = nn.Sequential(
+            *[
                 TransformerEncoderBlock(
                     embed_dim=embed_dim,
                     num_heads=num_heads,
-                    mlp_ratio=mlp_ratio,
+                    mlp_hidden_dim=mlp_hidden_dim,
                     dropout=dropout,
-                    attention_dropout=attention_dropout,
                 )
                 for _ in range(depth)
             ]
         )
-        self.norm = nn.LayerNorm(embed_dim)
-        self.head = nn.Linear(embed_dim, num_classes)
+        self.head = nn.Sequential(
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, num_classes),
+        )
 
         self._reset_parameters()
 
     def _reset_parameters(self):
         _trunc_normal_(self.pos_embed, std=0.02)
-        _trunc_normal_(self.cls_token, std=0.02)
-        _trunc_normal_(self.head.weight, std=0.02)
-        if self.head.bias is not None:
-            nn.init.zeros_(self.head.bias)
+        if self.cls_token is not None:
+            _trunc_normal_(self.cls_token, std=0.02)
+        _trunc_normal_(self.embed.weight, std=0.02)
+        if self.embed.bias is not None:
+            nn.init.zeros_(self.embed.bias)
+
         for module in self.modules():
-            if isinstance(module, nn.Linear) and module is not self.head:
+            if isinstance(module, nn.Linear) and module not in {self.embed}:
                 _trunc_normal_(module.weight, std=0.02)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
@@ -138,19 +160,18 @@ class VisionTransformer(nn.Module):
         if self.input_normalization:
             x = self.per_image_standardization(x)
 
-        bsz = x.shape[0]
-        x = self.patch_embed(x)
-        cls_token = self.cls_token.expand(bsz, -1, -1)
-        x = torch.cat((cls_token, x), dim=1)
-        x = x + self.pos_embed
-        x = self.pos_drop(x)
+        tokens = self.embed(self.patch_embed(x))
+        if self.use_cls_token:
+            cls_token = self.cls_token.expand(tokens.size(0), -1, -1)
+            tokens = torch.cat([cls_token, tokens], dim=1)
+        tokens = tokens + self.pos_embed
+        tokens = self.blocks(tokens)
 
-        for block in self.blocks:
-            x = block(x)
-
-        x = self.norm(x)
-        cls_output = x[:, 0]
-        logits = self.head(cls_output)
+        if self.use_cls_token:
+            tokens = tokens[:, 0]
+        else:
+            tokens = tokens.mean(dim=1)
+        logits = self.head(tokens)
         return logits
 
 
@@ -158,13 +179,13 @@ def vit_cifar(
     num_classes,
     img_size=32,
     patch_size=4,
-    embed_dim=256,
-    depth=6,
-    num_heads=8,
+    embed_dim=384,
+    depth=7,
+    num_heads=12,
     mlp_ratio=4.0,
     dropout=0.0,
-    attention_dropout=0.0,
     input_normalization=True,
+    use_cls_token=True,
 ):
     return VisionTransformer(
         img_size=img_size,
@@ -176,8 +197,8 @@ def vit_cifar(
         num_heads=num_heads,
         mlp_ratio=mlp_ratio,
         dropout=dropout,
-        attention_dropout=attention_dropout,
         input_normalization=input_normalization,
+        use_cls_token=use_cls_token,
     )
 
 
