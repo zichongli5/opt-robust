@@ -49,6 +49,8 @@ def parse_args():
     			default=argparse.SUPPRESS, type=int)
     parser.add_argument("--lr_warmup_decay",
     			default=argparse.SUPPRESS, type=float)
+    parser.add_argument("--lr_end_factor",
+    			default=argparse.SUPPRESS, type=float)
 
     parser.add_argument("--threshold",
     			default=90, type=float)
@@ -61,6 +63,8 @@ def parse_args():
     parser.add_argument('--eval_only',
                         action="store_true")
 
+    parser.add_argument('--speedrun_arch',
+                        action="store_true")
 
     args = parser.parse_args()
 

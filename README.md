@@ -24,7 +24,11 @@ python3 main.py --eval_only --dataset cifar10 --pretrain './ckpt/cifar10-adam.pt
 
 - To perform standard training on PreActResNet18 with SGD for 200 epochs:
 ```
-python3 main.py --method standard --dataset cifar10 --j_dir './exp' --optim sgd --epoch 200 --lr 0.2 --lr_scheduler_type multistep --weight_decay 0
+python3 main.py --method standard --dataset cifar100 --j_dir './sgd' --optim sgd --epoch 100 --lr 0.2 --lr_scheduler_type multistep --weight_decay 0
+python3 main.py --method standard --dataset cifar100 --j_dir './adam' --optim adam --epoch 100 --lr 0.0005 --lr_scheduler_type multistep --weight_decay 0
+python3 main.py --method standard --dataset cifar100 --j_dir './muon2e-2' --optim muon --epoch 100 --lr 0.02 --lr_scheduler_type multistep --weight_decay 0
+python3 main.py --method standard --dataset cifar100 --j_dir './muon1e-2_epoch10' --optim muon --epoch 10 --lr 0.01 --lr_scheduler_type multistep --weight_decay 0
+python3 main.py --method standard --dataset cifar100 --j_dir './adam_1e-3_epoch10' --optim adam --epoch 10 --lr 0.001 --lr_scheduler_type multistep --weight_decay 0
 ```
 
 - To train with augmented data by removing parts of the signal with low spectrum energy:

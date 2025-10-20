@@ -10,7 +10,7 @@ from typing import Any, Callable, List, Optional, Union, Tuple
 import os
 from PIL import Image
 
-data_dir = '/scratch/ssd001/home/ama/workspace/data/'
+data_dir = '/home/zli911/opt-robust/data/'
     
 def load_dataset(dataset, batch_size = 128):
     

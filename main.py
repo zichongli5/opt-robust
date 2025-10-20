@@ -44,6 +44,8 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     args = get_args()
+    if not os.path.exists(args.j_dir):
+        os.makedirs(args.j_dir)
     logging.basicConfig(
         filename=args.j_dir+ "/log.txt",
         format='%(asctime)s %(message)s', level=logging.INFO)
@@ -59,7 +61,7 @@ def main():
     model = get_model(args)
     model.to(device)
     if not args.eval_only:
-        opt, lr_scheduler = get_optim(model.parameters(), args)
+        opt, lr_scheduler = get_optim(model.parameters(), args, model.named_parameters())
     else:
         args.epoch = 0
 
